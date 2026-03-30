@@ -37,8 +37,12 @@ async def init_db():
         logger.error("DATABASE_URL is not set.")
         return
     try:
-        pool = await asyncpg.create_pool(DB_URL)
-        logger.info("Connected to database.")
+        try:
+            pool = await asyncpg.create_pool(DB_URL, ssl='require')
+            logger.info("Connected to database (SSL).")
+        except Exception:
+            pool = await asyncpg.create_pool(DB_URL)
+            logger.info("Connected to database (no SSL).")
         async with pool.acquire() as conn:
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS bot_logs (
@@ -1110,7 +1114,7 @@ class NexusBot(discord.Client):
                                     if not log_ch:
                                         category = discord.utils.get(guild.categories, name="RShield - Logs")
                                         if category:
-                                            log_ch = discord.utils.get(category.text_channels, name="r・salon-access")
+                                            log_ch = discord.utils.get(category.text_channels, name="logs・salon-access")
                                     if log_ch:
                                         log_embed = discord.Embed(
                                             title="Tentative d'accès à un salon restreint",
@@ -1700,6 +1704,12 @@ class NexusBot(discord.Client):
             await log_to_db('info', f'Bot mentioned by {message.author} in #{message.channel}')
             return
 
+        if message.content.strip().startswith(".") and message.guild:
+            if not await is_owner_or_ownerlist(message.guild, message.author.id):
+                embed = discord.Embed(description="❌ Seuls les membres de la ownerlist peuvent utiliser les commandes du bot.", color=0x2b2d31)
+                await message.channel.send(embed=embed)
+                return
+
         if message.content.strip().lower() == ".help":
             cmd_ids = await get_command_ids(message.guild) if message.guild else {}
             embed = build_help_embed(cmd_ids)
@@ -1905,6 +1915,20 @@ class NexusBot(discord.Client):
 bot = NexusBot()
 
 
+@bot.tree.interaction_check
+async def global_ownerlist_check(interaction: discord.Interaction) -> bool:
+    if interaction.guild is None:
+        return True
+    is_ol = await is_owner_or_ownerlist(interaction.guild, interaction.user.id)
+    if not is_ol:
+        await interaction.response.send_message(
+            "❌ Seuls les membres de la ownerlist peuvent utiliser les commandes du bot.",
+            ephemeral=True
+        )
+        return False
+    return True
+
+
 async def is_bot_owner_or_server_owner(guild, user_id):
     if BOT_OWNER_ID and user_id == BOT_OWNER_ID:
         return True
@@ -1995,46 +2019,46 @@ async def apply_punishment(guild, user, protection_key):
 
 
 AUDIT_LOG_CHANNELS = {
-    "role": "r・rôles",
-    "channel": "r・salons",
-    "member": "r・membres",
-    "voice": "r・vocal",
-    "message": "r・messages",
-    "server": "r・serveur",
-    "salon_access": "r・salon-access",
+    "role": "logs・rôles",
+    "channel": "logs・salons",
+    "member": "logs・membres",
+    "voice": "logs・vocal",
+    "message": "logs・messages",
+    "server": "logs・serveur",
+    "salon_access": "logs・salon-access",
 }
 
 PROTECTION_TO_LOG_CHANNEL = {
-    "anti_role_add": "r・rôles",
-    "anti_role_create": "r・rôles",
-    "anti_role_remove": "r・rôles",
-    "anti_role_update": "r・rôles",
-    "anti_role_delete": "r・rôles",
-    "anti_role_position": "r・rôles",
-    "anti_role_dangerous_perm": "r・rôles",
-    "anti_channel_create": "r・salons",
-    "anti_channel_update": "r・salons",
-    "anti_channel_delete": "r・salons",
-    "anti_channel_perm_update": "r・salons",
-    "anti_thread_create": "r・salons",
-    "anti_ban": "r・membres",
-    "anti_unban": "r・membres",
-    "anti_kick": "r・membres",
-    "anti_timeout": "r・membres",
-    "anti_disconnect": "r・vocal",
-    "anti_member_move": "r・vocal",
-    "anti_mute": "r・vocal",
-    "anti_deafen": "r・vocal",
-    "anti_link": "r・messages",
-    "anti_spam": "r・messages",
-    "anti_toxicity": "r・messages",
-    "anti_embed_delete": "r・messages",
-    "anti_gif_spam": "r・messages",
-    "anti_mention_spam": "r・messages",
-    "anti_server_update": "r・serveur",
-    "anti_webhook_create": "r・serveur",
-    "anti_bot_add": "r・serveur",
-    "salon_access": "r・salon-access",
+    "anti_role_add": "logs・rôles",
+    "anti_role_create": "logs・rôles",
+    "anti_role_remove": "logs・rôles",
+    "anti_role_update": "logs・rôles",
+    "anti_role_delete": "logs・rôles",
+    "anti_role_position": "logs・rôles",
+    "anti_role_dangerous_perm": "logs・rôles",
+    "anti_channel_create": "logs・salons",
+    "anti_channel_update": "logs・salons",
+    "anti_channel_delete": "logs・salons",
+    "anti_channel_perm_update": "logs・salons",
+    "anti_thread_create": "logs・salons",
+    "anti_ban": "logs・membres",
+    "anti_unban": "logs・membres",
+    "anti_kick": "logs・membres",
+    "anti_timeout": "logs・membres",
+    "anti_disconnect": "logs・vocal",
+    "anti_member_move": "logs・vocal",
+    "anti_mute": "logs・vocal",
+    "anti_deafen": "logs・vocal",
+    "anti_link": "logs・messages",
+    "anti_spam": "logs・messages",
+    "anti_toxicity": "logs・messages",
+    "anti_embed_delete": "logs・messages",
+    "anti_gif_spam": "logs・messages",
+    "anti_mention_spam": "logs・messages",
+    "anti_server_update": "logs・serveur",
+    "anti_webhook_create": "logs・serveur",
+    "anti_bot_add": "logs・serveur",
+    "salon_access": "logs・salon-access",
 }
 
 
@@ -4375,13 +4399,13 @@ async def logs_command(interaction: discord.Interaction):
             await category.edit(overwrites=overwrites)
 
         LOG_GROUPS = {
-            "r・rôles": ["anti_role_add", "anti_role_create", "anti_role_remove", "anti_role_update", "anti_role_delete", "anti_role_position"],
-            "r・salons": ["anti_channel_create", "anti_channel_update", "anti_channel_delete", "anti_thread_create"],
-            "r・membres": ["anti_ban", "anti_unban", "anti_kick", "anti_timeout"],
-            "r・vocal": ["anti_disconnect", "anti_member_move", "anti_mute", "anti_deafen"],
-            "r・messages": ["anti_link", "anti_spam", "anti_toxicity", "anti_embed_delete", "anti_gif_spam", "anti_mention_spam"],
-            "r・serveur": ["anti_server_update", "anti_webhook_create", "anti_bot_add"],
-            "r・salon-access": ["salon_access"],
+            "logs・rôles": ["anti_role_add", "anti_role_create", "anti_role_remove", "anti_role_update", "anti_role_delete", "anti_role_position"],
+            "logs・salons": ["anti_channel_create", "anti_channel_update", "anti_channel_delete", "anti_thread_create"],
+            "logs・membres": ["anti_ban", "anti_unban", "anti_kick", "anti_timeout"],
+            "logs・vocal": ["anti_disconnect", "anti_member_move", "anti_mute", "anti_deafen"],
+            "logs・messages": ["anti_link", "anti_spam", "anti_toxicity", "anti_embed_delete", "anti_gif_spam", "anti_mention_spam"],
+            "logs・serveur": ["anti_server_update", "anti_webhook_create", "anti_bot_add"],
+            "logs・salon-access": ["salon_access"],
         }
 
         created_channels = []
