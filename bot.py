@@ -55,7 +55,7 @@ async def init_db():
                     content TEXT NOT NULL,
                     status VARCHAR(16) NOT NULL DEFAULT 'pending',
                     created_at TIMESTAMP DEFAULT NOW(),
-                    sent_at TIMESTAMP
+                    processed_at TIMESTAMP
                 );
             """)
             await conn.execute("""
@@ -297,8 +297,8 @@ def build_help_embed(command_ids=None):
         else:
             text_lines.append(f"`{cmd['name']}` - {cmd['description']}")
 
-    description = "# Shield - Protect\n"
-    description += "Shield est un bot entièrement dédié à la protection discord. Nous sommes là pour garantir la protection de votre serveur discord avec les meilleures protections, nous sommes aussi à l'écoute de notre communauté pour vous garantir des mises à jour régulières.\n\n"
+    description = "# MssClick - Club\n"
+    description += "MssClick-Club est un bot entièrement dédié à la protection du discord MssClick - Club. Il est là pour garantir la protection du serveur Discord avec les meilleures protections.\n\n"
     description += "## Commandes Slash\n"
     description += "\n".join(slash_lines) + "\n\n"
     description += "## Commandes Textuelles\n"
@@ -334,7 +334,7 @@ class NexusBot(discord.Client):
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
         await log_to_db('info', f'Bot logged in as {self.user}')
 
-        streaming_activity = discord.Streaming(name="Shield - Protection", url="https://twitch.tv/shield")
+        streaming_activity = discord.Streaming(name="MssClick - Club", url="https://twitch.tv/mssclick")
         await self.change_presence(activity=streaming_activity)
 
         if not self.synced:
@@ -4803,9 +4803,11 @@ async def dump_command(interaction: discord.Interaction):
 @bot.tree.command(name="help", description="Afficher la liste des commandes du bot.")
 async def help_command(interaction: discord.Interaction):
     try:
-        if interaction.guild and not await can_use_bot(interaction.guild, interaction.user.id):
-            await interaction.response.send_message("Vous ne pouvez pas utiliser le bot.", ephemeral=True)
-            return
+        if interaction.guild:
+            is_ol = await is_owner_or_ownerlist(interaction.guild, interaction.user.id)
+            if not is_ol:
+                await interaction.response.send_message("❌ Seuls les membres de la ownerlist peuvent utiliser cette commande.", ephemeral=True)
+                return
         cmd_ids = await get_command_ids(interaction.guild) if interaction.guild else {}
         embed = build_help_embed(cmd_ids)
         view = discord.ui.View()
